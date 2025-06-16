@@ -1,0 +1,19 @@
+# configs/experiment_template.yml
+
+experiment_name: "template_experiment"
+output_path: "results"
+
+source_videos:
+  - path: "/path/to/your/video_1080p.y4m"
+    name: "VideoName1"
+    resolution: "1920x1080"
+    resolution_name: "1080p"
+
+tasks:
+  - codec: "libx265"
+    crf_values: [22, 28, 34]
+    preset: "medium"
+
+  - codec: "libx264"
+    crf_values: [21, 24, 28]
+    preset: "medium"
