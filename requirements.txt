@@ -1,0 +1,8 @@
+# For reading configurations and handling data
+pyyaml
+pandas
+
+# For analysis in notebooks
+notebook
+matplotlib
+seaborn
