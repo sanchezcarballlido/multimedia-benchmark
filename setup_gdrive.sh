@@ -25,6 +25,15 @@ REMOTE_DATA_PATH="Fluendo/R+D+i/Grants/6G-XR/Execution/benchmark/data"
 REMOTE_RESULTS_PATH="Fluendo/R+D+i/Grants/6G-XR/Execution/benchmark/results"
 
 
+# --- Dependency Checks ---
+check_dependency() {
+    command -v "$1" >/dev/null 2>&1 || { echo "Error: $1 is not installed. Please install it and try again."; exit 1; }
+}
+
+check_dependency rclone
+check_dependency fusermount
+
+
 # --- Main Logic ---
 
 COMMAND="$1"
@@ -41,7 +50,7 @@ case "$COMMAND" in
         # Create mount point if it doesn't exist
         if [ ! -d "${MOUNT_POINT}" ]; then
             echo "--> Creating mount point: ${MOUNT_POINT}"
-            mkdir -p "${MOUNT_POINT}"
+            mkdir -p "${MOUNT_POINT}" || { echo "Error: Failed to create mount point."; exit 1; }
         fi
 
         # Mount the rclone remote if not already mounted
@@ -51,31 +60,38 @@ case "$COMMAND" in
             echo "--> Mounting '${RCLONE_REMOTE}:' at '${MOUNT_POINT}'..."
             rclone mount "${RCLONE_REMOTE}:" "${MOUNT_POINT}" --vfs-cache-mode writes &
             sleep 2 # Give it a moment to mount
+            if ! mount | grep -q "on ${MOUNT_POINT}"; then
+                echo "Error: Mount failed. Please check rclone logs and configuration."; exit 1;
+            fi
             echo "--> Mount command sent to background. Keep this terminal open."
         fi
 
         # Ensure local data/ and results/ directories exist
         if [ ! -d "data" ]; then
             echo "--> Creating local data/ directory."
-            mkdir -p data
+            mkdir -p data || { echo "Error: Failed to create data/ directory."; exit 1; }
         fi
         if [ ! -d "results" ]; then
             echo "--> Creating local results/ directory."
-            mkdir -p results
+            mkdir -p results || { echo "Error: Failed to create results/ directory."; exit 1; }
         fi
 
         # Create/update symbolic links
         echo "--> Creating symbolic links for 'data' and 'results'..."
-        ln -sfn "${MOUNT_POINT}/${REMOTE_DATA_PATH}" data
-        ln -sfn "${MOUNT_POINT}/${REMOTE_RESULTS_PATH}" results
+        ln -sfn "${MOUNT_POINT}/${REMOTE_DATA_PATH}" data || { echo "Error: Failed to create symlink for data."; exit 1; }
+        ln -sfn "${MOUNT_POINT}/${REMOTE_RESULTS_PATH}" results || { echo "Error: Failed to create symlink for results."; exit 1; }
 
         echo "✅ Setup complete. You can now run your experiments in another terminal."
         ;;
 
     unmount)
         echo "--> Unmounting storage from ${MOUNT_POINT}..."
-        fusermount -u "${MOUNT_POINT}"
-        echo "✅ Storage unmounted."
+        if mount | grep -q "on ${MOUNT_POINT}"; then
+            fusermount -u "${MOUNT_POINT}" || { echo "Error: Failed to unmount."; exit 1; }
+            echo "✅ Storage unmounted."
+        else
+            echo "--> Nothing is mounted at ${MOUNT_POINT}."
+        fi
         ;;
 
     *)

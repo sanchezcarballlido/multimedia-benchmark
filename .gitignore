@@ -13,6 +13,7 @@ venv/
 
 # Data and Results
 data/
+local_data/
 results/
 
 # Local environment

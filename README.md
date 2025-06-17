@@ -43,7 +43,8 @@ Before you begin, ensure you have the following software installed. Please follo
 
 -   [**WSL (Windows Subsystem for Linux)**](https://learn.microsoft.com/en-us/windows/wsl/install) - The recommended environment for running this framework on Windows.
 -   [**rclone**](https://rclone.org/install/) - Used to connect to and mount cloud storage.
--   [**FFmpeg**](https://ffmpeg.org/download.html) - The core engine for video encoding and analysis.
+-   [**GStreamer**](https://gstreamer.freedesktop.org/documentation/installing/index.html) - Used for **video encoding**. Ensure you install the core framework and the main plugin packages (`gst-plugins-base`, `gst-plugins-good`, `gst-plugins-bad`, `gst-plugins-ugly`, and `gst-libav`).
+-   [**FFmpeg**](https://ffmpeg.org/download.html) - Used for **VMAF analysis**.
 -   [**Python 3.8+**](https://www.python.org/downloads/)
 
 ---
@@ -65,10 +66,9 @@ Before you begin, ensure you have the following software installed. Please follo
     pip install -r requirements.txt
     ```
 
-4. Ensure you have the required video codecs installed on your system:
-    - **FFmpeg**: The framework uses FFmpeg for video encoding and decoding. Make sure FFmpeg is installed and accessible in your system's PATH.
-    - **VMAF**: Install the VMAF library to compute video quality metrics. Follow the [VMAF installation guide]()
-    to set it up correctly.
+4. Ensure you have the required video codecs and libraries installed on your system:
+    - **GStreamer Plugins**: Make sure the required GStreamer elements for encoding (e.g., `x264enc`, `x265enc`) are available.
+    - **FFmpeg & VMAF**: Make sure FFmpeg is installed and accessible in your system's PATH. The `libvmaf` model files must also be available for FFmpeg to use.
 
 5. Mount cloud storage:
     This framework is designed to work with large files stored remotely. Run the included script to mount your pre-configured `rclone` remote.
@@ -87,7 +87,7 @@ Edit or copy the template at `configs/experiment_template.yml` to define your ex
 
 Example:
 ```yaml
-experiment_name: "my_experiment"
+experiment_name: "my_hybrid_experiment"
 output_path: "results"
 source_videos:
   - path: "/path/to/your/video_1080p.y4m"
@@ -110,6 +110,23 @@ From the project root, run:
 python main.py --config configs/experiment_template.yml
 ```
 Replace the config path with your own YAML file if needed.
+
+#### Running with Docker
+
+1. Build the Docker image:
+   ```bash
+   docker build -t multimedia-benchmark .
+   ```
+2. Run the experiment in a container:
+   ```bash
+   docker run --rm -v $(pwd)/results:/app/results -v $(pwd)/local_data:/app/data multimedia-benchmark
+   ```
+   **Note:** We use `local_data` instead of `data` when mounting the video source directory into the Docker container. This is because Docker (especially on Linux) cannot reliably follow symlinks from the host into the container. If your `data` directory is a symlink (e.g., to a larger storage location), Docker will not resolve it correctly, and the container will not see the files. To avoid this, place your source videos in a real directory called `local_data` and mount it directly.
+
+   You can override the config file path by changing the command at the end:
+   ```bash
+   docker run --rm -v $(pwd)/results:/app/results -v $(pwd)/local_data:/app/data multimedia-benchmark python main.py --config configs/your_config.yml
+   ```
 
 ### 3. Analyze results
 

@@ -3,7 +3,7 @@ import yaml
 import os
 from datetime import datetime
 from . import task_runner
-from . import pipeline
+from . import results_processing
 
 class Experiment:
     def __init__(self, config_path):
@@ -26,7 +26,7 @@ class Experiment:
                     self._run_single_task(video, task_def, crf)
         
         print("\n🔬 Processing all results...")
-        pipeline.process_results(self.results_dir)
+        results_processing.process_results(self.results_dir)
 
     def _run_single_task(self, video, task_def, crf):
         codec = task_def['codec']
