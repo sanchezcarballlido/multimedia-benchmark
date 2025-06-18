@@ -9,6 +9,58 @@ CODEC_MAP = {
     # Add other codecs here, e.g., "av1": "av1enc"
 }
 
+# Maps videotestsrc pattern names to their integer IDs for GStreamer
+GST_VIDEOTESTSRC_PATTERNS = {
+    'smpte': 0, 'snow': 1, 'black': 2, 'white': 3, 'red': 4,
+    'green': 5, 'blue': 6, 'ball': 18, 'pinstripe': 13,
+    'smpte75': 12, 'zone_plate': 15,
+}
+
+def generate_videotestsrc_source(video, output_dir):
+    """
+    Generates a temporary Y4M source file from GStreamer's videotestsrc.
+    This file acts as the reference for encoding and VMAF analysis.
+    """
+    temp_source_path = os.path.join(output_dir, f"temp_ref_{video['name']}.y4m")
+    log_file = os.path.join(output_dir, f"temp_ref_{video['name']}_generation.log")
+
+    pattern_name = video.get('pattern', 'smpte')
+    pattern_id = GST_VIDEOTESTSRC_PATTERNS.get(pattern_name)
+    if pattern_id is None:
+        print(f"    [ERROR] Videotestsrc pattern '{pattern_name}' not supported.")
+        return None
+
+    duration = video.get('duration_in_sec', 5)
+    framerate = video.get('framerate', 30)
+    num_buffers = int(duration * framerate)
+    width, height = video['resolution'].split('x')
+
+    # Define raw video format based on config
+    video_format = "I420" # Default for 8-bit 4:2:0
+    if video.get('bit_depth') == 10:
+        if video.get('chroma_subsampling') == "4:2:0":
+            video_format = "I420_10LE"
+        # Add other formats as needed
+    
+    # GStreamer pipeline to create the source file
+    pipeline = (
+        f"gst-launch-1.0 -e videotestsrc pattern={pattern_id} num-buffers={num_buffers} is-live=false ! "
+        f"video/x-raw,format={video_format},width={width},height={height},framerate={framerate}/1 ! "
+        f"y4menc ! filesink location=\"{temp_source_path}\""
+    )
+    
+    print(f"    - Generating videotestsrc source: {os.path.basename(temp_source_path)}")
+    try:
+        with open(log_file, 'w') as f:
+            subprocess.run(pipeline, shell=True, check=True, stdout=f, stderr=subprocess.STDOUT)
+        return temp_source_path
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        print(f"    [ERROR] Failed to generate videotestsrc source. Check log: {log_file}. Error: {e}")
+        # Clean up failed file
+        if os.path.exists(temp_source_path):
+            os.remove(temp_source_path)
+        return None
+
 def run_encoding(video, output_dir, codec, crf, preset):
     """
     Runs the encoding task using GStreamer.
@@ -72,10 +124,12 @@ def run_vmaf(video, encoded_file_path):
     if vmaf_model_path and os.path.exists(vmaf_model_path):
         print(f"    - Using VMAF model: {vmaf_model_path}")
         escaped_model_path = vmaf_model_path.replace('\\', '/').replace(':', '\\:')
+        # CORRECTED: Use model='path=...' syntax
         model_option = f":model='path={escaped_model_path}'"
     elif os.path.exists(default_model_path):
         print(f"    [INFO] VMAF_MODEL_PATH not set or file not found. Using default: {default_model_path}")
         escaped_model_path = default_model_path.replace('\\', '/').replace(':', '\\:')
+        # CORRECTED: Use model='path=...' syntax
         model_option = f":model='path={escaped_model_path}'"
     else:
         print("    [WARNING] No VMAF model found. VMAF may fail.")

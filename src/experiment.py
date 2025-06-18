@@ -38,11 +38,39 @@ class Experiment:
         
         print(f"  - Task: {video['name']} | {codec} @ CRF {crf} | Preset {preset}")
         
-        # Run encoding
-        encoding_log = task_runner.run_encoding(video, output_dir, codec, crf, preset)
-        if not encoding_log:
-            return # Skip if encoding failed
+        original_path = video.get('path')
+        temp_source_path = None
+        is_videotestsrc = video.get('type') == 'videotestsrc'
 
-        # Run VMAF
-        encoded_file_path = encoding_log.replace('_encoding.log', '.mp4')
-        task_runner.run_vmaf(video, encoded_file_path)
+        try:
+            # If the source is videotestsrc, generate it on the fly
+            if is_videotestsrc:
+                temp_source_path = task_runner.generate_videotestsrc_source(video, output_dir)
+                if not temp_source_path:
+                    print(f"    [SKIPPING] Failed to generate source for {video['name']}.")
+                    return
+                video['path'] = temp_source_path
+
+            # Ensure a valid source path exists before proceeding
+            if not video.get('path') or not os.path.exists(video['path']):
+                print(f"    [SKIPPING] Source path not found or is invalid for {video['name']}: {video.get('path')}")
+                return
+
+            # Run encoding
+            encoding_log = task_runner.run_encoding(video, output_dir, codec, crf, preset)
+            if not encoding_log:
+                return # Skip if encoding failed
+
+            # Run VMAF
+            encoded_file_path = encoding_log.replace('_encoding.log', '.mp4')
+            task_runner.run_vmaf(video, encoded_file_path)
+
+        finally:
+            # Clean up the temporary source file if one was created
+            if temp_source_path and os.path.exists(temp_source_path):
+                print(f"    - Cleaning up temporary source: {os.path.basename(temp_source_path)}")
+                os.remove(temp_source_path)
+            
+            # Restore the original video dictionary state for the next task
+            if is_videotestsrc:
+                video['path'] = original_path

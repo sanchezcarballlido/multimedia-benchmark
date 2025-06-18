@@ -1,4 +1,4 @@
-# configs/experiment_template.yml
+# configs/x264_x265.yml
 
 experiment_name: "template_experiment"
 output_path: "results"
@@ -12,11 +12,21 @@ source_videos:
     chroma_subsampling: "4:2:0"
     frame_rate: 30
 
+  - name: "videotestsrc_smpte"
+    type: "videotestsrc"
+    resolution: "1920x1080"
+    resolution_name: "1080p"
+    framerate: 30
+    duration_in_sec: 5
+    pattern: "smpte"
+    bit_depth: 8
+    chroma_subsampling: "4:2:0"
+
 tasks:
   - codec: "libx265"
     crf_values: [22, 28, 34]
-    preset: "medium"
+    preset: ["medium", "superfast", "ultrafast"]
 
   - codec: "libx264"
     crf_values: [18, 28, 48]
-    preset: "medium"
+    preset: ["medium", "superfast", "ultrafast"]
