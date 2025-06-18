@@ -32,8 +32,8 @@ class Experiment:
         codec = task_def['codec']
         preset = task_def['preset']
         
-        # Create folder structure
-        output_dir = os.path.join(self.results_dir, codec, str(crf), video['resolution_name'])
+        # Create folder structure (now includes video name)
+        output_dir = os.path.join(self.results_dir, codec, str(crf), video['resolution_name'], video['name'])
         os.makedirs(output_dir, exist_ok=True)
         
         print(f"  - Task: {video['name']} | {codec} @ CRF {crf} | Preset {preset}")

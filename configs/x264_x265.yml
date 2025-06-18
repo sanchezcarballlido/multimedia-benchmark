@@ -18,5 +18,5 @@ tasks:
     preset: "medium"
 
   - codec: "libx264"
-    crf_values: [21, 24, 28]
+    crf_values: [18, 28, 48]
     preset: "medium"
