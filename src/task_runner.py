@@ -83,7 +83,7 @@ def run_encoding(video, output_dir, codec, crf, preset):
             f"mp4mux ! filesink location=\"{output_file}\""
         )
     elif codec == "libx264":
-        encoder_params = f"quantizer={crf}"
+        encoder_params = f"qp-max={crf}"
         pipeline = (
             f"gst-launch-1.0 -e filesrc location=\"{video['path']}\" ! decodebin ! videoconvert ! "
             f"{codec_element} speed-preset={preset} {encoder_params} ! "

@@ -22,15 +22,18 @@ class Experiment:
         print("🚀 Starting experiment...")
         for video in self.config['source_videos']:
             for task_def in self.config['tasks']:
-                for crf in task_def['crf_values']:
-                    self._run_single_task(video, task_def, crf)
+                presets = task_def.get('preset', 'medium')
+                if not isinstance(presets, list):
+                    presets = [presets]
+                for preset in presets:
+                    for crf in task_def['crf_values']:
+                        self._run_single_task(video, task_def, crf, preset)
         
         print("\n🔬 Processing all results...")
         results_processing.process_results(self.results_dir)
 
-    def _run_single_task(self, video, task_def, crf):
+    def _run_single_task(self, video, task_def, crf, preset):
         codec = task_def['codec']
-        preset = task_def['preset']
         
         # Create folder structure (now includes video name)
         output_dir = os.path.join(self.results_dir, codec, str(crf), video['resolution_name'], video['name'])

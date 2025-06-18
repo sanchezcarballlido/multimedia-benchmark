@@ -14,8 +14,8 @@ source_videos:
 
   - name: "videotestsrc_smpte"
     type: "videotestsrc"
-    resolution: "1920x1080"
-    resolution_name: "1080p"
+    resolution: "3840x2160"
+    resolution_name: "4k"
     framerate: 30
     duration_in_sec: 5
     pattern: "smpte"
@@ -25,8 +25,8 @@ source_videos:
 tasks:
   - codec: "libx265"
     crf_values: [22, 28, 34]
-    preset: ["medium", "superfast", "ultrafast"]
+    preset: ["superfast", "ultrafast"]
 
   - codec: "libx264"
-    crf_values: [18, 28, 48]
-    preset: ["medium", "superfast", "ultrafast"]
+    crf_values: [10, 21, 51]
+    preset: ["superfast", "ultrafast"]
