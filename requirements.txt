@@ -1,6 +1,7 @@
 # For reading configurations and handling data
 pyyaml
 pandas
+scipy
 
 # For analysis in notebooks
 notebook

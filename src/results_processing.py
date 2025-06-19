@@ -5,6 +5,8 @@ import xml.etree.ElementTree as ET
 import subprocess
 import json
 import re
+from itertools import combinations
+from . import bdr_calculator
 
 def _get_bitrate_from_file(file_path):
     """
@@ -151,3 +153,30 @@ def process_results(results_dir):
     print("--- CSV Head ---")
     print(df.head().to_string())
     print("----------------")
+
+    # --- Calculate and Save BD-Rate to a new CSV file ---
+    unique_codecs = df['codec'].unique()
+    if len(unique_codecs) >= 2:
+        print("\n📊 Calculating BD-Rates...")
+        bd_rate_results = []
+        # Group data by video and preset to calculate BD-Rate for each specific condition
+        for (video_name, preset), group_df in df.groupby(['video_name', 'preset']):
+            # Iterate through all unique pairs of codecs
+            for anchor_codec, test_codec in combinations(unique_codecs, 2):
+                # Calculate BD-Rate in both directions (A vs B, and B vs A)
+                for anchor, test in [(anchor_codec, test_codec), (test_codec, anchor_codec)]:
+                    bd_rate = bdr_calculator.calculate_bd_rate(group_df, anchor, test, 'vmaf')
+                    if bd_rate is not None:
+                        bd_rate_results.append({
+                            'video_name': video_name,
+                            'preset': preset,
+                            'anchor_codec': anchor,
+                            'test_codec': test,
+                            'bd_rate_vmaf_%': bd_rate
+                        })
+        
+        if bd_rate_results:
+            bd_rate_df = pd.DataFrame(bd_rate_results)
+            output_bdr_csv_path = os.path.join(results_dir, "bd_rate_results.csv")
+            bd_rate_df.to_csv(output_bdr_csv_path, index=False)
+            print(f"✅ Successfully created BD-Rate results file at: {output_bdr_csv_path}")
