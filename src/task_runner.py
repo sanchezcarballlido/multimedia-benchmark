@@ -99,18 +99,21 @@ def run_encoding(video, output_dir, codec, crf, preset, config_file=None):
     # Get additional options from the config file
     config_options = _parse_config_file_to_gst_options(config_file)
 
+    # Add a targeted debug flag for the encoder element. Level 4 (INFO) should show properties.
+    debug_flag = f"--gst-debug={codec_element}:4"
+
     # GStreamer command
     if codec == "libx265":
         encoder_params = f"qp={crf}"
         pipeline = (
-            f"gst-launch-1.0 -e filesrc location=\"{video['path']}\" ! decodebin ! videoconvert ! "
+            f"gst-launch-1.0 {debug_flag} -e filesrc location=\"{video['path']}\" ! decodebin ! videoconvert ! "
             f"{codec_element} speed-preset={preset} {encoder_params} {config_options} ! h265parse ! "
             f"mp4mux ! filesink location=\"{output_file}\""
         )
     elif codec == "libx264":
         encoder_params = f"qp-max={crf}"
         pipeline = (
-            f"gst-launch-1.0 -e filesrc location=\"{video['path']}\" ! decodebin ! videoconvert ! "
+            f"gst-launch-1.0 {debug_flag} -e filesrc location=\"{video['path']}\" ! decodebin ! videoconvert ! "
             f"{codec_element} speed-preset={preset} {encoder_params} {config_options} ! "
             f"mp4mux ! filesink location=\"{output_file}\""
         )
