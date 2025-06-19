@@ -10,6 +10,7 @@ venv/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+notebooks/*.png
 
 # Data and Results
 data/
