@@ -4,6 +4,7 @@ import pandas as pd
 import xml.etree.ElementTree as ET
 import subprocess
 import json
+import re
 
 def _get_bitrate_from_file(file_path):
     """
@@ -56,6 +57,36 @@ def _extract_vmaf_from_xml(xml_path):
         print(f"Warning: Could not parse VMAF score from {xml_path}.")
         return None
 
+def _extract_cpu_time_from_log(log_path):
+    """
+    Parses the output of `/usr/bin/time -v` to get total CPU time.
+    Total CPU time is the sum of user time and system time.
+    """
+    if not os.path.exists(log_path):
+        print(f"Warning: Time log not found at {log_path}.")
+        return None
+    
+    user_time = None
+    sys_time = None
+    try:
+        with open(log_path, 'r') as f:
+            for line in f:
+                if 'User time (seconds):' in line:
+                    user_time = float(line.split(':')[1].strip())
+                elif 'System time (seconds):' in line:
+                    sys_time = float(line.split(':')[1].strip())
+        
+        if user_time is not None and sys_time is not None:
+            return user_time + sys_time
+        else:
+            print(f"Warning: Could not find User or System time in {log_path}.")
+            return None
+            
+    except (IOError, IndexError, ValueError) as e:
+        print(f"Warning: Could not parse CPU time from {log_path}. Error: {e}")
+        return None
+
+
 def process_results(results_dir):
     """
     Walks through the results directory, parses logs and media files,
@@ -83,12 +114,14 @@ def process_results(results_dir):
                 log_path = os.path.join(root, file)
                 encoded_file_path = log_path.replace("_encoding.log", ".mp4")
                 vmaf_log_path = log_path.replace("_encoding.log", "_vmaf.log")
+                time_log_path = log_path.replace("_encoding.log", "_time.log")
 
                 print(f"  - Processing: {video_name} | Codec: {parts[0]} | CRF: {parts[1]} | Preset: {preset}")
 
                 # --- Extract metrics ---
                 bitrate = _get_bitrate_from_file(encoded_file_path)
                 vmaf_score = _extract_vmaf_from_xml(vmaf_log_path)
+                cpu_time = _extract_cpu_time_from_log(time_log_path)
                 
                 # --- Assemble data record ---
                 data = {
@@ -98,7 +131,8 @@ def process_results(results_dir):
                     'video_name': video_name,
                     'preset': preset,
                     'bitrate_kbps': bitrate,
-                    'vmaf': vmaf_score
+                    'vmaf': vmaf_score,
+                    'cpu_time_seconds': cpu_time
                 }
                 all_data.append(data)
     

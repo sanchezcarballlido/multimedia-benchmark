@@ -147,6 +147,7 @@ RUN apt-get update && \
     # Other runtime dependencies
     libglib2.0-0 \
     libgl1 \
+    time \
     && rm -rf /var/lib/apt/lists/*
 
 # Configure the dynamic linker to find our custom-built shared libraries in /usr/local/lib

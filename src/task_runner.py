@@ -85,11 +85,12 @@ def generate_videotestsrc_source(video, output_dir):
 
 def run_encoding(video, output_dir, codec, crf, preset, config_file=None):
     """
-    Runs the encoding task using GStreamer.
+    Runs the encoding task using GStreamer and measures CPU time.
     """
     base_filename = f"{video['name']}_{preset}"
     output_file = os.path.join(output_dir, f"{base_filename}.mp4")
     log_file = os.path.join(output_dir, f"{base_filename}_encoding.log")
+    time_log_file = os.path.join(output_dir, f"{base_filename}_time.log")
 
     codec_element = CODEC_MAP.get(codec)
     if not codec_element:
@@ -102,7 +103,7 @@ def run_encoding(video, output_dir, codec, crf, preset, config_file=None):
     # Add a targeted debug flag for the encoder element. Level 4 (INFO) should show properties.
     debug_flag = f"--gst-debug={codec_element}:4"
 
-    # GStreamer command
+    # GStreamer pipeline definition
     if codec == "libx265":
         encoder_params = f"qp={crf}"
         pipeline = (
@@ -118,11 +119,12 @@ def run_encoding(video, output_dir, codec, crf, preset, config_file=None):
             f"mp4mux ! filesink location=\"{output_file}\""
         )
     else:
-        encoder_params = ""
         print(f"    [WARNING] No encoder parameters set for codec '{codec}'. Using defaults. No pipeline will be run.")
         return None
 
-    command = pipeline
+    # Wrap the GStreamer command with /usr/bin/time to measure resource usage.
+    # The -v flag provides verbose output, and -o redirects it to our time log file.
+    command = f"/usr/bin/time -v -o \"{time_log_file}\" {pipeline}"
     
     try:
         with open(log_file, 'w') as f:
@@ -130,9 +132,11 @@ def run_encoding(video, output_dir, codec, crf, preset, config_file=None):
         return log_file
     except subprocess.CalledProcessError:
         print(f"    [ERROR] GStreamer encoding failed. Check the log: {log_file}")
+        if os.path.exists(time_log_file):
+            print(f"            Check time command log for details: {time_log_file}")
         return None
     except FileNotFoundError:
-        print("[ERROR] `gst-launch-1.0` not found. Is GStreamer installed and in your PATH?")
+        print("[ERROR] `gst-launch-1.0` or `/usr/bin/time` not found. Are they installed and in your PATH?")
         return None
 
 
@@ -152,12 +156,10 @@ def run_vmaf(video, encoded_file_path):
     if vmaf_model_path and os.path.exists(vmaf_model_path):
         print(f"    - Using VMAF model: {vmaf_model_path}")
         escaped_model_path = vmaf_model_path.replace('\\', '/').replace(':', '\\:')
-        # CORRECTED: Use model='path=...' syntax
         model_option = f":model='path={escaped_model_path}'"
     elif os.path.exists(default_model_path):
         print(f"    [INFO] VMAF_MODEL_PATH not set or file not found. Using default: {default_model_path}")
         escaped_model_path = default_model_path.replace('\\', '/').replace(':', '\\:')
-        # CORRECTED: Use model='path=...' syntax
         model_option = f":model='path={escaped_model_path}'"
     else:
         print("    [WARNING] No VMAF model found. VMAF may fail.")
