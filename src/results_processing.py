@@ -91,28 +91,27 @@ def _extract_cpu_time_from_log(log_path):
 
 def process_results(results_dir):
     """
-    Walks through the results directory, parses logs and media files,
-    and compiles the data into a single CSV file.
+    Walks through the results directory, compiles the data, and calculates BD-Rates
+    using two approaches: pairwise comparison and single-anchor comparison.
     """
     all_data = []
     print(f"🔍 Starting to process results in: {results_dir}")
     
     for root, _, files in os.walk(results_dir):
         for file in files:
-            # Use the encoding log as the primary indicator of a completed task
             if file.endswith("_encoding.log"):
-                # --- Extract info from directory/filename ---
                 parts = root.replace(results_dir, '').strip(os.sep).split(os.sep)
-                if len(parts) < 3:
+                if len(parts) < 4:  # Now expecting codec/crf/resolution/video
                     print(f"Warning: Skipping unexpected directory structure: {root}")
                     continue
                 
-                # Robustly get preset, assuming it's the last part of the filename
                 base_name = file.replace("_encoding.log", "")
-                preset = base_name.split('_')[-1]
-                video_name = '_'.join(base_name.split('_')[:-1])
+                preset_match = re.search(r'_([a-zA-Z]+fast)$', base_name)
+                if not preset_match:
+                    continue
+                preset = preset_match.group(1)
+                video_name = base_name.replace(f'_{preset}', '')
 
-                # --- Define paths for all files ---
                 log_path = os.path.join(root, file)
                 encoded_file_path = log_path.replace("_encoding.log", ".mp4")
                 vmaf_log_path = log_path.replace("_encoding.log", "_vmaf.log")
@@ -120,63 +119,93 @@ def process_results(results_dir):
 
                 print(f"  - Processing: {video_name} | Codec: {parts[0]} | CRF: {parts[1]} | Preset: {preset}")
 
-                # --- Extract metrics ---
                 bitrate = _get_bitrate_from_file(encoded_file_path)
                 vmaf_score = _extract_vmaf_from_xml(vmaf_log_path)
                 cpu_time = _extract_cpu_time_from_log(time_log_path)
                 
-                # --- Assemble data record ---
                 data = {
-                    'codec': parts[0],
-                    'crf': int(parts[1]),
-                    'resolution': parts[2],
-                    'video_name': video_name,
-                    'preset': preset,
-                    'bitrate_kbps': bitrate,
-                    'vmaf': vmaf_score,
-                    'cpu_time_seconds': cpu_time
+                    'codec': parts[0], 'crf': int(parts[1]), 'resolution': parts[2],
+                    'video_name': video_name, 'preset': preset, 'bitrate_kbps': bitrate,
+                    'vmaf': vmaf_score, 'cpu_time_seconds': cpu_time
                 }
                 all_data.append(data)
     
     if not all_data:
-        print("⚠️ Warning: No data was processed. Check the results directory for log files.")
+        print("⚠️ Warning: No data was processed.")
         return
 
-    # Convert to DataFrame, sort, and save
-    df = pd.DataFrame(all_data)
-    df = df.sort_values(by=['video_name', 'codec', 'crf']).reset_index(drop=True)
-    
+    df = pd.DataFrame(all_data).sort_values(by=['video_name', 'codec', 'crf']).reset_index(drop=True)
     output_csv_path = os.path.join(results_dir, "combined_data.csv")
     df.to_csv(output_csv_path, index=False)
-    
     print(f"\n✅ Successfully created combined results file at: {output_csv_path}")
-    print("--- CSV Head ---")
-    print(df.head().to_string())
-    print("----------------")
 
-    # --- Calculate and Save BD-Rate to a new CSV file ---
+    # --- Approach 1: Pairwise BD-Rate Calculation (Existing) ---
+    _calculate_pairwise_bd_rate(df, results_dir)
+
+    # --- Approach 2: Single-Anchor BD-Rate Calculation (New) ---
+    _calculate_single_anchor_bd_rate(df, results_dir)
+
+
+def _calculate_pairwise_bd_rate(df, results_dir):
+    """Calculates BD-Rate for all codec pairs within the same preset."""
     unique_codecs = df['codec'].unique()
-    if len(unique_codecs) >= 2:
-        print("\n📊 Calculating BD-Rates...")
-        bd_rate_results = []
-        # Group data by video and preset to calculate BD-Rate for each specific condition
-        for (video_name, preset), group_df in df.groupby(['video_name', 'preset']):
-            # Iterate through all unique pairs of codecs
-            for anchor_codec, test_codec in combinations(unique_codecs, 2):
-                # Calculate BD-Rate in both directions (A vs B, and B vs A)
-                for anchor, test in [(anchor_codec, test_codec), (test_codec, anchor_codec)]:
-                    bd_rate = bdr_calculator.calculate_bd_rate(group_df, anchor, test, 'vmaf')
-                    if bd_rate is not None:
-                        bd_rate_results.append({
-                            'video_name': video_name,
-                            'preset': preset,
-                            'anchor_codec': anchor,
-                            'test_codec': test,
-                            'bd_rate_vmaf_%': bd_rate
-                        })
-        
-        if bd_rate_results:
-            bd_rate_df = pd.DataFrame(bd_rate_results)
-            output_bdr_csv_path = os.path.join(results_dir, "bd_rate_results.csv")
-            bd_rate_df.to_csv(output_bdr_csv_path, index=False)
-            print(f"✅ Successfully created BD-Rate results file at: {output_bdr_csv_path}")
+    if len(unique_codecs) < 2:
+        return
+
+    print("\n📊 Calculating pairwise BD-Rates...")
+    bd_rate_results = []
+    for (video_name, preset), group_df in df.groupby(['video_name', 'preset']):
+        for anchor_codec, test_codec in combinations(unique_codecs, 2):
+            for anchor, test in [(anchor_codec, test_codec), (test_codec, anchor_codec)]:
+                bd_rate = bdr_calculator.calculate_bd_rate(group_df, anchor, test, 'vmaf')
+                if bd_rate is not None:
+                    bd_rate_results.append({
+                        'video_name': video_name, 'preset': preset,
+                        'anchor_codec': anchor, 'test_codec': test,
+                        'bd_rate_vmaf_%': bd_rate
+                    })
+    
+    if bd_rate_results:
+        bd_rate_df = pd.DataFrame(bd_rate_results)
+        output_path = os.path.join(results_dir, "bd_rate_results.csv")
+        bd_rate_df.to_csv(output_path, index=False)
+        print(f"✅ Successfully created pairwise BD-Rate results file at: {output_path}")
+
+def _calculate_single_anchor_bd_rate(df, results_dir):
+    """Calculates BD-Rate for all configurations against one fixed anchor."""
+    ANCHOR_CODEC = 'libx264'
+    ANCHOR_PRESET = 'superfast'
+    
+    print(f"\n📊 Calculating BD-Rates against single anchor ({ANCHOR_CODEC} @ {ANCHOR_PRESET})...")
+    bd_rate_anchor_results = []
+    
+    test_points = df[['codec', 'preset']].drop_duplicates().to_records(index=False)
+    
+    for (video_name,), group_df in df.groupby(['video_name']):
+        for test_codec, test_preset in test_points:
+            if test_codec == ANCHOR_CODEC and test_preset == ANCHOR_PRESET:
+                continue
+                
+            bd_rate = bdr_calculator.calculate_bd_rate_for_presets(
+                group_df,
+                anchor_codec=ANCHOR_CODEC, anchor_preset=ANCHOR_PRESET,
+                test_codec=test_codec, test_preset=test_preset,
+                metric='vmaf'
+            )
+            
+            if bd_rate is not None:
+                bd_rate_anchor_results.append({
+                    'video_name': video_name,
+                    'anchor': f"{ANCHOR_CODEC}@{ANCHOR_PRESET}",
+                    'test': f"{test_codec}@{test_preset}",
+                    'bd_rate_vmaf_%': bd_rate
+                })
+
+    if bd_rate_anchor_results:
+        bd_rate_anchor_df = pd.DataFrame(bd_rate_anchor_results)
+        output_path = os.path.join(results_dir, "bd_rate_anchor_results.csv")
+        bd_rate_anchor_df.to_csv(output_path, index=False)
+        print(f"✅ Successfully created single-anchor BD-Rate results at: {output_path}")
+    else:
+        print(f"⚠️ Warning: Could not calculate any single-anchor BD-Rates. "
+              f"Ensure the anchor ({ANCHOR_CODEC}@{ANCHOR_PRESET}) has valid data.")

@@ -46,3 +46,37 @@ def calculate_bd_rate(df, anchor_codec, test_codec, metric='vmaf'):
     bd_rate = (np.exp(avg_diff) - 1) * 100
 
     return bd_rate
+
+def calculate_bd_rate_for_presets(df, anchor_codec, anchor_preset, test_codec, test_preset, metric='vmaf'):
+    """
+    Calculates the BD-Rate between two specific codec/preset configurations.
+
+    This is used for single-anchor comparisons where the anchor has a fixed preset.
+    """
+    anchor_data = df[(df['codec'] == anchor_codec) & (df['preset'] == anchor_preset)].sort_values(by='bitrate_kbps')
+    test_data = df[(df['codec'] == test_codec) & (df['preset'] == test_preset)].sort_values(by='bitrate_kbps')
+
+    # It's okay to not have enough data points, as this function will be called for all combinations.
+    # The calling function will handle cases where a comparison isn't possible.
+    if len(anchor_data) < 2 or len(test_data) < 2:
+        return None
+
+    # --- The rest of the logic is identical to calculate_bd_rate ---
+    anchor_log_br = np.log(anchor_data['bitrate_kbps'])
+    test_log_br = np.log(test_data['bitrate_kbps'])
+
+    min_metric = max(anchor_data[metric].min(), test_data[metric].min())
+    max_metric = min(anchor_data[metric].max(), test_data[metric].max())
+
+    if min_metric >= max_metric:
+        return None
+
+    integration_points = np.linspace(min_metric, max_metric, num=100)
+    interp_log_br_anchor = pchip_interpolate(anchor_data[metric], anchor_log_br, integration_points)
+    interp_log_br_test = pchip_interpolate(test_data[metric], test_log_br, integration_points)
+
+    integral_diff = np.trapz(interp_log_br_test - interp_log_br_anchor, integration_points)
+    avg_diff = integral_diff / (max_metric - min_metric)
+    bd_rate = (np.exp(avg_diff) - 1) * 100
+
+    return bd_rate
