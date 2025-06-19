@@ -26,7 +26,11 @@ tasks:
   - codec: "libx265"
     crf_values: [22, 28, 34]
     preset: ["superfast", "ultrafast"]
+    # Optional: Path to a codec-specific configuration file.
+    config_file: "configs/codecs/x265_settings.cfg"
 
   - codec: "libx264"
     crf_values: [10, 21, 51]
     preset: ["superfast", "ultrafast"]
+    # Optional: Path to a codec-specific configuration file.
+    config_file: "configs/codecs/x264_settings.cfg"

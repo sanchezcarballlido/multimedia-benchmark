@@ -16,6 +16,28 @@ GST_VIDEOTESTSRC_PATTERNS = {
     'smpte75': 12, 'zone_plate': 15,
 }
 
+def _parse_config_file_to_gst_options(config_path):
+    """
+    Parses a codec config file (.cfg) and returns a GStreamer options string.
+    The file should contain key=value pairs, one per line.
+    Lines starting with # or empty lines are ignored.
+    """
+    if not config_path or not os.path.exists(config_path):
+        return ""
+    
+    options = []
+    try:
+        with open(config_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    options.append(line)
+    except IOError as e:
+        print(f"    [WARNING] Could not read config file: {config_path}. Error: {e}")
+        return ""
+    
+    return " ".join(options)
+
 def generate_videotestsrc_source(video, output_dir):
     """
     Generates a temporary Y4M source file from GStreamer's videotestsrc.
@@ -61,7 +83,7 @@ def generate_videotestsrc_source(video, output_dir):
             os.remove(temp_source_path)
         return None
 
-def run_encoding(video, output_dir, codec, crf, preset):
+def run_encoding(video, output_dir, codec, crf, preset, config_file=None):
     """
     Runs the encoding task using GStreamer.
     """
@@ -74,19 +96,22 @@ def run_encoding(video, output_dir, codec, crf, preset):
         print(f"    [ERROR] Codec '{codec}' not supported in GStreamer mapping.")
         return None
 
+    # Get additional options from the config file
+    config_options = _parse_config_file_to_gst_options(config_file)
+
     # GStreamer command
     if codec == "libx265":
         encoder_params = f"qp={crf}"
         pipeline = (
             f"gst-launch-1.0 -e filesrc location=\"{video['path']}\" ! decodebin ! videoconvert ! "
-            f"{codec_element} speed-preset={preset} {encoder_params} ! h265parse ! "
+            f"{codec_element} speed-preset={preset} {encoder_params} {config_options} ! h265parse ! "
             f"mp4mux ! filesink location=\"{output_file}\""
         )
     elif codec == "libx264":
         encoder_params = f"qp-max={crf}"
         pipeline = (
             f"gst-launch-1.0 -e filesrc location=\"{video['path']}\" ! decodebin ! videoconvert ! "
-            f"{codec_element} speed-preset={preset} {encoder_params} ! "
+            f"{codec_element} speed-preset={preset} {encoder_params} {config_options} ! "
             f"mp4mux ! filesink location=\"{output_file}\""
         )
     else:

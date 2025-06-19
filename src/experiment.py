@@ -25,21 +25,24 @@ class Experiment:
                 presets = task_def.get('preset', 'medium')
                 if not isinstance(presets, list):
                     presets = [presets]
+                
+                config_file = task_def.get('config_file') # Get path to config file
+
                 for preset in presets:
                     for crf in task_def['crf_values']:
-                        self._run_single_task(video, task_def, crf, preset)
+                        self._run_single_task(video, task_def, crf, preset, config_file)
         
         print("\n🔬 Processing all results...")
         results_processing.process_results(self.results_dir)
 
-    def _run_single_task(self, video, task_def, crf, preset):
+    def _run_single_task(self, video, task_def, crf, preset, config_file=None):
         codec = task_def['codec']
         
         # Create folder structure (now includes video name)
         output_dir = os.path.join(self.results_dir, codec, str(crf), video['resolution_name'], video['name'])
         os.makedirs(output_dir, exist_ok=True)
         
-        print(f"  - Task: {video['name']} | {codec} @ CRF {crf} | Preset {preset}")
+        print(f"  - Task: {video['name']} | {codec} @ CRF {crf} | Preset {preset} | Config: {config_file or 'N/A'}")
         
         original_path = video.get('path')
         temp_source_path = None
@@ -60,7 +63,7 @@ class Experiment:
                 return
 
             # Run encoding
-            encoding_log = task_runner.run_encoding(video, output_dir, codec, crf, preset)
+            encoding_log = task_runner.run_encoding(video, output_dir, codec, crf, preset, config_file)
             if not encoding_log:
                 return # Skip if encoding failed
 
