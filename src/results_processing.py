@@ -97,20 +97,26 @@ def process_results(results_dir):
     all_data = []
     print(f"🔍 Starting to process results in: {results_dir}")
     
+    # A more robust regex to capture all your presets
+    all_presets = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo"]
+    preset_pattern = r'_(' + '|'.join(all_presets) + ')$'
+
     for root, _, files in os.walk(results_dir):
         for file in files:
             if file.endswith("_encoding.log"):
                 parts = root.replace(results_dir, '').strip(os.sep).split(os.sep)
-                if len(parts) < 4:  # Now expecting codec/crf/resolution/video
+                if len(parts) < 4:
                     print(f"Warning: Skipping unexpected directory structure: {root}")
                     continue
                 
                 base_name = file.replace("_encoding.log", "")
-                preset_match = re.search(r'_([a-zA-Z]+fast)$', base_name)
+                preset_match = re.search(preset_pattern, base_name)
+                
                 if not preset_match:
                     continue
+                
                 preset = preset_match.group(1)
-                video_name = base_name.replace(f'_{preset}', '')
+                video_name = re.sub(preset_pattern, '', base_name)
 
                 log_path = os.path.join(root, file)
                 encoded_file_path = log_path.replace("_encoding.log", ".mp4")
@@ -174,7 +180,7 @@ def _calculate_pairwise_bd_rate(df, results_dir):
 def _calculate_single_anchor_bd_rate(df, results_dir):
     """Calculates BD-Rate for all configurations against one fixed anchor."""
     ANCHOR_CODEC = 'libx264'
-    ANCHOR_PRESET = 'superfast'
+    ANCHOR_PRESET = 'medium'
     
     print(f"\n📊 Calculating BD-Rates against single anchor ({ANCHOR_CODEC} @ {ANCHOR_PRESET})...")
     bd_rate_anchor_results = []

@@ -1,4 +1,4 @@
-# src/vaf/experiment.py
+# src/experiment.py
 import yaml
 import os
 from datetime import datetime
@@ -6,7 +6,7 @@ from . import task_runner
 from . import results_processing
 
 class Experiment:
-    def __init__(self, config_path):
+    def __init__(self, config_path, keep_decoded=False):
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
         
@@ -17,6 +17,7 @@ class Experiment:
         )
         os.makedirs(self.results_dir, exist_ok=True)
         print(f"Results will be saved in: {self.results_dir}")
+        self.keep_decoded_files = keep_decoded
 
     def run(self):
         print("🚀 Starting experiment...")
@@ -47,6 +48,7 @@ class Experiment:
         original_path = video.get('path')
         temp_source_path = None
         is_videotestsrc = video.get('type') == 'videotestsrc'
+        final_raw_path = None  # To keep track of the file to be deleted
 
         try:
             # If the source is videotestsrc, generate it on the fly
@@ -66,16 +68,27 @@ class Experiment:
             encoding_log = task_runner.run_encoding(video, output_dir, codec, crf, preset, config_file)
             if not encoding_log:
                 return # Skip if encoding failed
-
-            # Run VMAF
+            
             encoded_file_path = encoding_log.replace('_encoding.log', '.mp4')
-            task_runner.run_vmaf(video, encoded_file_path)
+
+            # Run the post-processing pipeline (decoding + future filters)
+            final_raw_path = task_runner.run_post_processing(encoded_file_path, output_dir, video)
+            if not final_raw_path:
+                return
+
+            # Run VMAF comparing the original video with the final processed raw file
+            task_runner.run_vmaf(video, final_raw_path)
 
         finally:
             # Clean up the temporary source file if one was created
             if temp_source_path and os.path.exists(temp_source_path):
                 print(f"    - Cleaning up temporary source: {os.path.basename(temp_source_path)}")
                 os.remove(temp_source_path)
+
+            # Clean up the final raw (decoded) file if it exists and the flag is not set
+            if final_raw_path and os.path.exists(final_raw_path) and not self.keep_decoded_files:
+                print(f"    - Cleaning up decoded raw file: {os.path.basename(final_raw_path)}")
+                os.remove(final_raw_path)
             
             # Restore the original video dictionary state for the next task
             if is_videotestsrc:

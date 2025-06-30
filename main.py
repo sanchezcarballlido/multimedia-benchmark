@@ -11,6 +11,11 @@ def main():
         required=True,
         help="Path to the experiment configuration file (e.g., configs/my_test.yml)"
     )
+    parser.add_argument(
+        "--keep-decoded-files",
+        action="store_true",
+        help="If set, the decoded raw (.y4m) files will not be deleted after VMAF analysis."
+    )
     args = parser.parse_args()
 
     # Check if the configuration file exists
@@ -19,8 +24,8 @@ def main():
         return
 
     try:
-        # Create and run the experiment
-        exp = Experiment(config_path=args.config)
+        # Create and run the experiment, passing the new flag
+        exp = Experiment(config_path=args.config, keep_decoded=args.keep_decoded_files)
         exp.run()
         print("\n✅ Experiment completed successfully.")
     except Exception as e:

@@ -139,13 +139,60 @@ def run_encoding(video, output_dir, codec, crf, preset, config_file=None):
         print("[ERROR] `gst-launch-1.0` or `/usr/bin/time` not found. Are they installed and in your PATH?")
         return None
 
+def run_post_processing(encoded_file_path, output_dir, video_config):
+    """
+    Runs a post-processing pipeline on the encoded video.
+    Currently, this only involves decoding, but can be extended with
+    filtering steps like super-resolution, denoising, etc.
+    """
+    # Step 1: Decode the video back to a raw format (Y4M)
+    decoded_file_path = encoded_file_path.replace('.mp4', '_decoded.y4m')
+    decode_log_file = encoded_file_path.replace('.mp4', '_decoding.log')
 
-def run_vmaf(video, encoded_file_path):
+    decode_pipeline = (
+        f"gst-launch-1.0 -e filesrc location=\"{encoded_file_path}\" ! decodebin ! "
+        f"videoconvert ! y4menc ! filesink location=\"{decoded_file_path}\""
+    )
+    
+    print(f"    - Decoding to raw: {os.path.basename(decoded_file_path)}")
+    try:
+        with open(decode_log_file, 'w') as f:
+            subprocess.run(decode_pipeline, shell=True, check=True, stdout=f, stderr=subprocess.STDOUT)
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        print(f"    [ERROR] GStreamer decoding failed. Check log: {decode_log_file}. Error: {e}")
+        if os.path.exists(decoded_file_path):
+            os.remove(decoded_file_path)
+        return None
+
+    # --- Placeholder for Additional Filtering ---
+    # The 'decoded_file_path' is now the input for any further processing.
+    # For example, you could add a call to a Python script for AI filtering here.
+    #
+    # Example:
+    # if 'filters' in video_config:
+    #     filtered_path = run_ai_filter(decoded_file_path, video_config['filters'])
+    #     if filtered_path:
+    #         return filtered_path # Return the path to the final filtered file
+    
+    # If no other filters are applied, the decoded file is the final raw file.
+    return decoded_file_path
+
+
+def run_vmaf(video, processed_file_path):
     """
-    Runs the VMAF analysis using FFmpeg, with improved error logging and explicit model path.
+    Runs the VMAF analysis using FFmpeg, comparing a processed file against the original.
     """
-    vmaf_xml_log = encoded_file_path.replace('.mp4', '_vmaf.log')
-    ffmpeg_stderr_log = encoded_file_path.replace('.mp4', '_ffmpeg_vmaf_stderr.log')
+    # Determine the base for log file names from the processed file path
+    base_name = os.path.basename(processed_file_path)
+    if base_name.endswith('_decoded.y4m'):
+        log_base_name = base_name.replace('_decoded.y4m', '')
+    else:
+        # Fallback for original behavior if a non-decoded file is passed
+        log_base_name = os.path.splitext(base_name)[0]
+    
+    output_dir = os.path.dirname(processed_file_path)
+    vmaf_xml_log = os.path.join(output_dir, f"{log_base_name}_vmaf.log")
+    ffmpeg_stderr_log = os.path.join(output_dir, f"{log_base_name}_ffmpeg_vmaf_stderr.log")
 
     escaped_vmaf_log_path = vmaf_xml_log.replace('\\', '/').replace(':', '\\:')
 
@@ -165,7 +212,7 @@ def run_vmaf(video, encoded_file_path):
         print("    [WARNING] No VMAF model found. VMAF may fail.")
 
     command = (
-        f"ffmpeg -i \"{encoded_file_path}\" -i \"{video['path']}\" "
+        f"ffmpeg -i \"{processed_file_path}\" -i \"{video['path']}\" "
         f"-lavfi \"[0:v]setpts=PTS-STARTPTS[dist];[1:v]setpts=PTS-STARTPTS[ref];"
         f"[dist][ref]libvmaf=log_path='{escaped_vmaf_log_path}':log_fmt=xml:n_threads=4{model_option}\" "
         f"-f null -"
@@ -178,7 +225,7 @@ def run_vmaf(video, encoded_file_path):
             )
         return vmaf_xml_log
     except subprocess.CalledProcessError:
-        print(f"    [ERROR] VMAF calculation failed for '{os.path.basename(encoded_file_path)}'.")
+        print(f"    [ERROR] VMAF calculation failed for '{os.path.basename(processed_file_path)}'.")
         print(f"            Check FFmpeg's error log for details: {ffmpeg_stderr_log}")
         return None
     except FileNotFoundError:
