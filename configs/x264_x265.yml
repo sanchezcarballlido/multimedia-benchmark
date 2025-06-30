@@ -25,12 +25,10 @@ source_videos:
 tasks:
   - codec: "libx265"
     crf_values: [10, 28, 51]
-    preset: ["superfast", "ultrafast"]
-    # Optional: Path to a codec-specific configuration file.
+    preset: ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo"]
     config_file: "configs/codecs/x265_settings.cfg"
 
   - codec: "libx264"
     crf_values: [10, 21, 51]
-    preset: ["superfast", "ultrafast"]
-    # Optional: Path to a codec-specific configuration file.
+    preset: ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo"]
     config_file: "configs/codecs/x264_settings.cfg"

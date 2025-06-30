@@ -144,6 +144,7 @@ RUN apt-get update && \
     gstreamer1.0-plugins-ugly \
     gstreamer1.0-tools \
     gstreamer1.0-libav \
+    gstreamer1.0-x \
     # Other runtime dependencies
     libglib2.0-0 \
     libgl1 \
